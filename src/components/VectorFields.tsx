@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { Vector2, Vector3, Vector4 } from "three"
-import styled from "@emotion/styled"
 
 type Props = {
     dimensions: 1 | 2 | 3 | 4,
@@ -18,11 +17,17 @@ type Props = {
 const VectorFields = ({
     dimensions, vectorType, inputType, defaultValue, label, minValue, maxValue, step, disableFieldLabels, onChange
 }: Props) => {
-    const [vector, setVector] = useState(
-        defaultValue ?
-            dimensions == 1 ? new Vector4(1, 0, 0, 0) : new Vector4(...defaultValue)
-            : new Vector4(0, 0, 0, 0)
-    )
+    const [vector, setVector] = useState(() => {
+        let initalValue = new Vector4(0, 0, 0, 0)
+        if (defaultValue) {
+            if (typeof defaultValue == "number")
+                initalValue.x = defaultValue
+            else
+                initalValue = new Vector4(...defaultValue.toArray())
+        }
+
+        return initalValue
+    })
 
     useEffect(() => {
         if (onChange)
@@ -59,7 +64,7 @@ const VectorFields = ({
                             else if (i == 1) vector.y = Number(e.target.value)
                             else if (i == 2) vector.z = Number(e.target.value);
                             else if (i == 3) vector.w = Number(e.target.value);
-                            setVector(new Vector4(...vector));
+                            setVector(new Vector4(...vector.toArray()));
                         }} />
                     {inputType == "slider" && <div>{indexToVectorField(i)}</div>}
                 </div>)
