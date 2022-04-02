@@ -3,7 +3,8 @@ import React, { useEffect, useState } from 'react';
 export const loadPages = async (): Promise<Array<String>> => {
   const response = await fetch("api/get-pages");
   await response
-  const pages = await response.json();
+  let pages = await response.json();
+  pages = pages.map(page => page.substr(1)) // Remove forward slash
   return pages;
 }
 
