@@ -4,7 +4,9 @@ export const loadPages = async (): Promise<Array<String>> => {
   const response = await fetch("api/get-pages");
   await response
   let pages = await response.json();
-  pages = pages.map(page => page.substr(1)) // Remove forward slash
+  if (process.env.NODE_ENV === "production") {
+    pages = pages.map(page => page.substr(1)) // Remove forward slash
+  }
   return pages;
 }
 
@@ -17,7 +19,10 @@ const Test = () => {
   const pageLinks = pages.map((item, index) => {
     const title = item;
     const link = window.location.href + item;
-    return <a href={link} key={index}>{title}</a>
+    return <div key={index}>
+      <a href={link} >{title}</a>
+      <br />
+    </div >
   })
   return (
     <div>
