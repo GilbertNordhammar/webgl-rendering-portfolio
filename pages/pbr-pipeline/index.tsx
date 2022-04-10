@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import * as THREE from 'three';
-import { Vector2, Vector3, Vector4, Matrix4, Light, Scene, Camera } from "three"
+import { Vector2, Vector3, Vector4, Matrix4, Light, Scene, Camera, Object3D } from "three"
 import { loadShaderCode } from "@lib/shaderUtils"
 import VectorFields from "@components/VectorFields"
 
@@ -51,7 +51,7 @@ const init = async () => {
   addLight(g_Sun, g_Scene, [g_Material])
 
   const pointlight = new THREE.PointLight(0xFFFFFF, 1, 100)
-  pointlight.position.set(15, 0, 0)
+  pointlight.position.set(12, 2, 0)
   addLight(pointlight, g_Scene, [g_Material])
 
   g_Renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -108,23 +108,30 @@ const addLight = (
     scene.add(light)
 }
 
+const rotateAround = (rotatee: Object3D, origin: Vector3, up: Vector3, mouseMovement: Vector2) => {
+  const originalDist = rotatee.position.distanceTo(origin)
+
+  const right = new Vector3
+  right.crossVectors(rotatee.getWorldDirection(origin), new Vector3(0, 1, 0))
+  right.multiplyScalar(mouseMovement.x)
+
+  rotatee.position.add(right)
+  rotatee.position.y += mouseMovement.y;
+  rotatee.lookAt(origin)
+
+  const movement = new Vector3()
+  movement.copy(rotatee.getWorldDirection(origin))
+  movement.multiplyScalar(-originalDist)
+
+  rotatee.position.copy(origin)
+  rotatee.position.add(movement)
+}
+
 const animation = (time) => {
   // mesh.rotation.x = time / 2000;
   // mesh.rotation.y = time / 1000;
 
-
-  const originalDist = g_Camera.position.distanceTo(g_Mesh.position)
-
-  const worldUp = new Vector3(0, 1, 0)
-  const right = new Vector3
-  right.crossVectors(g_Camera.getWorldDirection(g_Mesh.position), worldUp)
-  g_Camera.position.add(right)
-  g_Camera.lookAt(g_Mesh.position)
-  const movement = new Vector3()
-  movement.copy(g_Camera.getWorldDirection(g_Mesh.position))
-  movement.multiplyScalar(-originalDist)
-  g_Camera.position.copy(g_Mesh.position)
-  g_Camera.position.add(movement)
+  // rotateAround(g_Camera, g_Mesh.position, new Vector3(0, 1, 0), 1)
 
   g_Renderer.render(g_Scene, g_Camera);
 }
@@ -132,6 +139,35 @@ const animation = (time) => {
 export default function PBRPipeline() {
   useEffect(() => {
     init();
+
+    let altDown = false;
+    let rotateCamera = false;
+    window.addEventListener('mousemove', e => {
+      if (!rotateCamera || !altDown)
+        return
+
+      const xDir = e.movementX > 0 ? -1 : 1;
+      const yDir = e.movementY > 0 ? -1 : 1;
+      const movement = new Vector2(xDir * 5, 0);
+      rotateAround(g_Camera, g_Mesh.position, new Vector3(0, 1, 0), movement)
+    });
+    window.addEventListener('mousedown', e => {
+      if (altDown) {
+        document.body.requestPointerLock();
+        rotateCamera = true;
+      }
+    });
+    window.addEventListener('mouseup', e => {
+      document.exitPointerLock();
+      rotateCamera = false;
+    });
+    window.addEventListener("keydown", e => {
+      if (e.key == "Alt" && !altDown)
+        altDown = true;
+    })
+    window.addEventListener("keyup", e => {
+      altDown = false;
+    })
   }, [])
 
   return (
@@ -162,7 +198,7 @@ export default function PBRPipeline() {
           }}
         />
         <VectorFields
-          label="Sun Strength"
+          label="Sun Intensity"
           dimensions={1}
           vectorType="color"
           inputType="slider"
@@ -185,6 +221,18 @@ export default function PBRPipeline() {
           maxValue={1}
           onChange={color => {
             g_AmbientLight.color.set(new THREE.Color(color.x, color.y, color.z));
+          }}
+        />
+        <VectorFields
+          label="Pointlight Intensity"
+          dimensions={1}
+          vectorType="color"
+          inputType="slider"
+          defaultValue={0.35}
+          minValue={0}
+          maxValue={10}
+          onChange={value => {
+            g_Pointlights.forEach(light => light.intensity = value.x)
           }}
         />
       </div>
