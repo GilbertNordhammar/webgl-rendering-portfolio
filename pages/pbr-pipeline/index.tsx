@@ -1,61 +1,132 @@
 import React, { useEffect } from 'react';
 import * as THREE from 'three';
-import { Vector2, Vector3, Vector4, Matrix4, Light } from "three"
+import { Vector2, Vector3, Vector4, Matrix4, Light, Scene, Camera } from "three"
 import { loadShaderCode } from "@lib/shaderUtils"
 import VectorFields from "@components/VectorFields"
 
-let scene: THREE.Scene;
-let camera: THREE.PerspectiveCamera;
-let renderer: THREE.WebGLRenderer;
-let mesh: THREE.Mesh;
-const material = new THREE.ShaderMaterial({
+const MAX_DIRECTIONAL_LIGHTS = 1
+const MAX_POINT_LIGHTS = 4
+
+let g_Scene: THREE.Scene;
+let g_Camera: THREE.PerspectiveCamera;
+let g_Renderer: THREE.WebGLRenderer;
+let g_Mesh: THREE.Mesh;
+const g_Material = new THREE.ShaderMaterial({
   lights: true,
   defines: {
-    MAX_DIRECTIONAL_LIGHTS: 1
+    MAX_DIRECTIONAL_LIGHTS,
+    MAX_POINT_LIGHTS
   }
 });
 
-const sun = new THREE.DirectionalLight(0xFFFFFF, 1)
-const ambientLight = new THREE.AmbientLight(0xFFFFFF, 0.2)
+const g_Sun = new THREE.DirectionalLight(0xFFFFFF, 1)
+const g_AmbientLight = new THREE.AmbientLight(0xFFFFFF, 0.2)
+const g_Pointlights: THREE.PointLight[] = []
+const g_DirectionalLights: THREE.DirectionalLight[] = []
 
 const init = async () => {
-  camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 10)
-  camera.position.z = 0.8
+  g_Camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 100)
+  g_Camera.position.z = 40
 
-  scene = new THREE.Scene()
-  scene.add(ambientLight)
-  scene.add(sun)
+  g_Scene = new THREE.Scene()
 
-  material.uniforms = {
-    ...material.uniforms,
+  g_Material.uniforms = {
+    ...g_Material.uniforms,
     ...THREE.UniformsLib["lights"],
-    directionalLightsCount: { value: 1 }
+    directionalLightsCount: { value: 0 },
+    pointLightsCount: { value: 0 }
   }
-  material.vertexShader = await loadShaderCode("pbr-pipeline/vert.glsl")
-  material.fragmentShader = await loadShaderCode("pbr-pipeline/frag.glsl")
+  g_Material.vertexShader = await loadShaderCode("pbr-pipeline/vert.glsl")
+  g_Material.fragmentShader = await loadShaderCode("pbr-pipeline/frag.glsl")
 
+  let geometry = new THREE.SphereGeometry(10, 32, 32);
+  g_Mesh = new THREE.Mesh(geometry, g_Material);
 
-  material.defines = {
-    MAX_DIRECTIONAL_LIGHTS: 1
-  }
-  material.lights = true;
+  // Adding meshes
+  g_Scene.add(g_Mesh);
 
-  let geometry = new THREE.SphereGeometry(0.2, 32, 32);
-  mesh = new THREE.Mesh(geometry, material);
+  // Adding lights
+  g_Scene.add(g_AmbientLight)
 
-  scene.add(mesh);
+  addLight(g_Sun, g_Scene, [g_Material])
 
-  renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setAnimationLoop(animation);
-  document.body.appendChild(renderer.domElement);
+  const pointlight = new THREE.PointLight(0xFFFFFF, 1, 100)
+  pointlight.position.set(15, 0, 0)
+  addLight(pointlight, g_Scene, [g_Material])
+
+  g_Renderer = new THREE.WebGLRenderer({ antialias: true });
+  g_Renderer.setSize(window.innerWidth, window.innerHeight);
+  g_Renderer.setAnimationLoop(animation);
+  document.body.appendChild(g_Renderer.domElement);
 }
 
-function animation(time) {
+const addLight = (
+  light: THREE.PointLight | THREE.DirectionalLight,
+  scene: THREE.Scene,
+  materials: THREE.ShaderMaterial[]
+) => {
+  let tooManyLights = false;
+
+  if (light instanceof THREE.PointLight) {
+    if (g_Pointlights.length + 1 <= MAX_POINT_LIGHTS) {
+      g_Pointlights.push(light)
+
+      materials.forEach(mat => {
+        if (!mat.uniforms.pointLightsCount)
+          mat.uniforms.pointLightsCount = { value: 0 }
+        mat.uniforms.pointLightsCount.value = g_Pointlights.length
+      })
+
+      const geometry = new THREE.SphereGeometry(1, 8, 8);
+      const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
+      const sphere = new THREE.Mesh(geometry, material);
+      sphere.position.copy(light.position)
+      scene.add(sphere);
+    }
+    else {
+      tooManyLights = true;
+      console.log(`Too many pointlights! Maximum amount is ${MAX_POINT_LIGHTS}`)
+    }
+  }
+  else if (light instanceof THREE.DirectionalLight) {
+    if (g_DirectionalLights.length + 1 <= MAX_DIRECTIONAL_LIGHTS) {
+      g_DirectionalLights.push(light)
+
+      materials.forEach(mat => {
+        if (!mat.uniforms.directionalLightsCount)
+          mat.uniforms.directionalLightsCount = { value: 0 }
+        mat.uniforms.directionalLightsCount.value = g_DirectionalLights.length
+      })
+    }
+    else {
+      tooManyLights = true;
+      console.log(`Too many directional lights! Maximum amount is ${MAX_DIRECTIONAL_LIGHTS}`)
+    }
+  }
+
+  if (!tooManyLights)
+    scene.add(light)
+}
+
+const animation = (time) => {
   // mesh.rotation.x = time / 2000;
   // mesh.rotation.y = time / 1000;
 
-  renderer.render(scene, camera);
+
+  const originalDist = g_Camera.position.distanceTo(g_Mesh.position)
+
+  const worldUp = new Vector3(0, 1, 0)
+  const right = new Vector3
+  right.crossVectors(g_Camera.getWorldDirection(g_Mesh.position), worldUp)
+  g_Camera.position.add(right)
+  g_Camera.lookAt(g_Mesh.position)
+  const movement = new Vector3()
+  movement.copy(g_Camera.getWorldDirection(g_Mesh.position))
+  movement.multiplyScalar(-originalDist)
+  g_Camera.position.copy(g_Mesh.position)
+  g_Camera.position.add(movement)
+
+  g_Renderer.render(g_Scene, g_Camera);
 }
 
 export default function PBRPipeline() {
@@ -75,7 +146,7 @@ export default function PBRPipeline() {
           minValue={-1}
           maxValue={1}
           onChange={pos => {
-            sun.position.set(pos.x, pos.y, pos.z);
+            g_Sun.position.set(pos.x, pos.y, pos.z);
           }}
         />
         <VectorFields
@@ -87,7 +158,7 @@ export default function PBRPipeline() {
           minValue={0}
           maxValue={1}
           onChange={color => {
-            sun.color.set(new THREE.Color(color.x, color.y, color.z))
+            g_Sun.color.set(new THREE.Color(color.x, color.y, color.z))
           }}
         />
         <VectorFields
@@ -99,7 +170,7 @@ export default function PBRPipeline() {
           minValue={0}
           maxValue={1}
           onChange={value => {
-            sun.intensity = value.x;
+            g_Sun.intensity = value.x;
           }}
         />
       </div>
@@ -113,7 +184,7 @@ export default function PBRPipeline() {
           minValue={0}
           maxValue={1}
           onChange={color => {
-            ambientLight.color.set(new THREE.Color(color.x, color.y, color.z));
+            g_AmbientLight.color.set(new THREE.Color(color.x, color.y, color.z));
           }}
         />
       </div>
@@ -127,9 +198,9 @@ export default function PBRPipeline() {
           minValue={0}
           maxValue={1}
           onChange={value => {
-            if (!material.uniforms.metallic)
-              material.uniforms.metallic = { value: 0 }
-            material.uniforms.metallic.value = value.x
+            if (!g_Material.uniforms.metallic)
+              g_Material.uniforms.metallic = { value: 0 }
+            g_Material.uniforms.metallic.value = value.x
           }}
         />
         <VectorFields
@@ -141,10 +212,9 @@ export default function PBRPipeline() {
           minValue={0}
           maxValue={1}
           onChange={value => {
-            if (!material.uniforms.roughness)
-              material.uniforms.roughness = { value: 0 }
-            material.uniforms.roughness.value = value.x
-            console.log(material.uniforms.roughness.value)
+            if (!g_Material.uniforms.roughness)
+              g_Material.uniforms.roughness = { value: 0 }
+            g_Material.uniforms.roughness.value = value.x
           }}
         />
       </div>
