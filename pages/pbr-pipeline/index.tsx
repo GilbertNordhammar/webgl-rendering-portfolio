@@ -8,40 +8,33 @@ let scene: THREE.Scene;
 let camera: THREE.PerspectiveCamera;
 let renderer: THREE.WebGLRenderer;
 let mesh: THREE.Mesh;
-let material: THREE.ShaderMaterial
+const material = new THREE.ShaderMaterial({
+  lights: true,
+  defines: {
+    MAX_DIRECTIONAL_LIGHTS: 1
+  }
+});
 
 const sun = new THREE.DirectionalLight(0xFFFFFF, 1)
 const ambientLight = new THREE.AmbientLight(0xFFFFFF, 0.2)
 
 const init = async () => {
   camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 10)
-  camera.position.z = 1
+  camera.position.z = 0.8
 
   scene = new THREE.Scene()
   scene.add(ambientLight)
   scene.add(sun)
 
-  let vertexShader: string = await loadShaderCode("pbr-pipeline/vert.glsl");
-  let fragmentShader: string = await loadShaderCode("pbr-pipeline/frag.glsl");
-
-  let modelMatrix = new Matrix4()
-  modelMatrix.multiply(camera.modelViewMatrix)
-
-  console.log(THREE.UniformsLib)
-
-  scene.getObjectById
-  const uniforms = {
+  material.uniforms = {
+    ...material.uniforms,
     ...THREE.UniformsLib["lights"],
-    directionalLightsCount: { value: 1 },
-    sunStrength: { value: 1 }
+    directionalLightsCount: { value: 1 }
   }
+  material.vertexShader = await loadShaderCode("pbr-pipeline/vert.glsl")
+  material.fragmentShader = await loadShaderCode("pbr-pipeline/frag.glsl")
 
-  material = new THREE.ShaderMaterial({
-    uniforms,
-    vertexShader: vertexShader,
-    fragmentShader: fragmentShader,
-    lights: true
-  });
+
   material.defines = {
     MAX_DIRECTIONAL_LIGHTS: 1
   }
@@ -59,8 +52,8 @@ const init = async () => {
 }
 
 function animation(time) {
-  mesh.rotation.x = time / 2000;
-  mesh.rotation.y = time / 1000;
+  // mesh.rotation.x = time / 2000;
+  // mesh.rotation.y = time / 1000;
 
   renderer.render(scene, camera);
 }
@@ -78,7 +71,7 @@ export default function PBRPipeline() {
           dimensions={3}
           vectorType="position"
           inputType="slider"
-          defaultValue={new Vector3(1, 0, 0.6)}
+          defaultValue={new Vector3(0, 1, 0)}
           minValue={-1}
           maxValue={1}
           onChange={pos => {
@@ -121,6 +114,37 @@ export default function PBRPipeline() {
           maxValue={1}
           onChange={color => {
             ambientLight.color.set(new THREE.Color(color.x, color.y, color.z));
+          }}
+        />
+      </div>
+      <div style={{ display: "flex", justifyContent: "space-evenly", marginTop: "20px" }}>
+        <VectorFields
+          label="Metallic"
+          dimensions={1}
+          vectorType="color"
+          inputType="slider"
+          defaultValue={0}
+          minValue={0}
+          maxValue={1}
+          onChange={value => {
+            if (!material.uniforms.metallic)
+              material.uniforms.metallic = { value: 0 }
+            material.uniforms.metallic.value = value.x
+          }}
+        />
+        <VectorFields
+          label="Roughness"
+          dimensions={1}
+          vectorType="color"
+          inputType="slider"
+          defaultValue={0.25}
+          minValue={0}
+          maxValue={1}
+          onChange={value => {
+            if (!material.uniforms.roughness)
+              material.uniforms.roughness = { value: 0 }
+            material.uniforms.roughness.value = value.x
+            console.log(material.uniforms.roughness.value)
           }}
         />
       </div>
