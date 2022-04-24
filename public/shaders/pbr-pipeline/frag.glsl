@@ -6,6 +6,7 @@ uniform float metallic;
 uniform float roughness;
 
 uniform int pointLightsCount;
+uniform mat4 viewMatrixInverse;
 
 // THREE uniforms
 uniform vec3 ambientLightColor;
@@ -16,7 +17,7 @@ struct DirectionalLight {
 };
 
 struct Pointlight {
-    vec3 position;
+    vec3 position; // Relative to camera
     vec3 color;
     float decay;
     float distance; 
@@ -95,25 +96,26 @@ void main()
     vec3 viewDir = normalize(cameraPosition - WorldPos);
     vec3 albedo = vec3(1, 0, 0);
 
-    vec3 color = vec3(0.03) * albedo; // initialize with ambient
+    vec3 color = vec3(0.04) * albedo; // initialize with ambient
     
     // Applying directional light
     PBR(color, directionalLights[0].color, directionalLights[0].direction, viewDir);
 
-    // Applying spotlights
+    // Applying pointlights
     for(int i = 0; i < pointLightsCount; i++)
     {
-        float dist          = length(pointLights[i].position - WorldPos);
+        vec3 lightWorldPos = (viewMatrixInverse * vec4(pointLights[i].position, 1.0)).xyz;
+
+        float dist          = distance(lightWorldPos, WorldPos);
         float attenuation   = 1.0 / (dist * dist);
         vec3 radianceLight  = pointLights[i].color * attenuation;
-        vec3 lightDir       = normalize(pointLights[i].position - WorldPos);
+        vec3 lightDir       = normalize(lightWorldPos - WorldPos);
         PBR(color, radianceLight, lightDir, viewDir);
     }
 
-
     // Tone mapping and gamma correction
     color = color / (color + vec3(1.0));
-    color = pow(color, vec3(1.0/2.2));  
+    color = pow(color, vec3(1.0/2.2));
 
     gl_FragColor = vec4(color, 1);
 }

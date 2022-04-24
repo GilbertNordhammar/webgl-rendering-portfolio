@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useReducer } from 'react';
 import * as THREE from 'three';
 import { Vector2, Vector3, Vector4, Matrix4, Light, Scene, Camera, Object3D } from "three"
 import { loadShaderCode } from "@lib/shaderUtils"
@@ -24,6 +24,8 @@ const g_AmbientLight = new THREE.AmbientLight(0xFFFFFF, 0.2)
 const g_Pointlights: THREE.PointLight[] = []
 const g_DirectionalLights: THREE.DirectionalLight[] = []
 
+const g_PointlightsMeshes: THREE.Mesh[] = []
+
 const init = async () => {
   g_Camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 100)
   g_Camera.position.z = 40
@@ -34,7 +36,8 @@ const init = async () => {
     ...g_Material.uniforms,
     ...THREE.UniformsLib["lights"],
     directionalLightsCount: { value: 0 },
-    pointLightsCount: { value: 0 }
+    pointLightsCount: { value: 0 },
+    viewMatrixInverse: { value: g_Camera.matrixWorldInverse }
   }
   g_Material.vertexShader = await loadShaderCode("pbr-pipeline/vert.glsl")
   g_Material.fragmentShader = await loadShaderCode("pbr-pipeline/frag.glsl")
@@ -81,7 +84,8 @@ const addLight = (
       const material = new THREE.MeshBasicMaterial({ color: 0xffffff });
       const sphere = new THREE.Mesh(geometry, material);
       sphere.position.copy(light.position)
-      scene.add(sphere);
+      scene.add(sphere)
+      g_PointlightsMeshes.push(sphere)
     }
     else {
       tooManyLights = true;
@@ -108,6 +112,11 @@ const addLight = (
     scene.add(light)
 }
 
+const movePointLight = (index: number, position: Vector3) => {
+  g_Pointlights[index].position.copy(position)
+  g_PointlightsMeshes[index].position.copy(position)
+}
+
 const rotateAround = (rotatee: Object3D, origin: Vector3, up: Vector3, mouseMovement: Vector2) => {
   const originalDist = rotatee.position.distanceTo(origin)
 
@@ -128,17 +137,28 @@ const rotateAround = (rotatee: Object3D, origin: Vector3, up: Vector3, mouseMove
 }
 
 const animation = (time) => {
-  // mesh.rotation.x = time / 2000;
-  // mesh.rotation.y = time / 1000;
 
-  // rotateAround(g_Camera, g_Mesh.position, new Vector3(0, 1, 0), 1)
+  g_Pointlights.forEach((pointLight, index) => {
+    const pos = new Vector3(pointLight.position.x, Math.sin(time / 1000) * 10, pointLight.position.z)
+    movePointLight(index, pos)
+  })
+
+  g_Material.uniforms.viewMatrixInverse = { value: g_Camera.matrixWorld }
 
   g_Renderer.render(g_Scene, g_Camera);
 }
 
 export default function PBRPipeline() {
+  const [initialized, setInitialized] = useState(false)
+  const [, forceUpdate] = useReducer(x => x + 1, 0);
+
   useEffect(() => {
-    init();
+    document.addEventListener("initialized", () => setInitialized(true))
+
+    init().then(() => {
+      setInitialized(true)
+      forceUpdate()
+    })
 
     let altDown = false;
     let rotateCamera = false;
@@ -170,102 +190,104 @@ export default function PBRPipeline() {
     })
   }, [])
 
-  return (
-    <div>
-      <div style={{ display: "flex", justifyContent: "space-evenly" }}>
-        <VectorFields
-          label="Sun Direction"
-          dimensions={3}
-          vectorType="position"
-          inputType="slider"
-          defaultValue={new Vector3(0, 1, 0)}
-          minValue={-1}
-          maxValue={1}
-          onChange={pos => {
-            g_Sun.position.set(pos.x, pos.y, pos.z);
-          }}
-        />
-        <VectorFields
-          label="Sun Color"
-          dimensions={3}
-          vectorType="color"
-          inputType="slider"
-          defaultValue={new Vector3(1, 1, 1)}
-          minValue={0}
-          maxValue={1}
-          onChange={color => {
-            g_Sun.color.set(new THREE.Color(color.x, color.y, color.z))
-          }}
-        />
-        <VectorFields
-          label="Sun Intensity"
-          dimensions={1}
-          vectorType="color"
-          inputType="slider"
-          defaultValue={0.35}
-          minValue={0}
-          maxValue={1}
-          onChange={value => {
-            g_Sun.intensity = value.x;
-          }}
-        />
-      </div>
-      <div style={{ display: "flex", justifyContent: "space-evenly", marginTop: "20px" }}>
-        <VectorFields
-          label="Ambient Color"
-          dimensions={3}
-          vectorType="color"
-          inputType="slider"
-          defaultValue={new Vector3(0.1, 0.1, 0.1)}
-          minValue={0}
-          maxValue={1}
-          onChange={color => {
-            g_AmbientLight.color.set(new THREE.Color(color.x, color.y, color.z));
-          }}
-        />
-        <VectorFields
-          label="Pointlight Intensity"
-          dimensions={1}
-          vectorType="color"
-          inputType="slider"
-          defaultValue={0.35}
-          minValue={0}
-          maxValue={10}
-          onChange={value => {
-            g_Pointlights.forEach(light => light.intensity = value.x)
-          }}
-        />
-      </div>
-      <div style={{ display: "flex", justifyContent: "space-evenly", marginTop: "20px" }}>
-        <VectorFields
-          label="Metallic"
-          dimensions={1}
-          vectorType="color"
-          inputType="slider"
-          defaultValue={0}
-          minValue={0}
-          maxValue={1}
-          onChange={value => {
-            if (!g_Material.uniforms.metallic)
-              g_Material.uniforms.metallic = { value: 0 }
-            g_Material.uniforms.metallic.value = value.x
-          }}
-        />
-        <VectorFields
-          label="Roughness"
-          dimensions={1}
-          vectorType="color"
-          inputType="slider"
-          defaultValue={0.25}
-          minValue={0}
-          maxValue={1}
-          onChange={value => {
-            if (!g_Material.uniforms.roughness)
-              g_Material.uniforms.roughness = { value: 0 }
-            g_Material.uniforms.roughness.value = value.x
-          }}
-        />
-      </div>
+  const page = <div>
+    <div style={{ display: "flex", justifyContent: "space-evenly" }}>
+      <VectorFields
+        label="Sun Direction"
+        dimensions={3}
+        vectorType="position"
+        inputType="slider"
+        defaultValue={new Vector3(0, 1, 0)}
+        minValue={-1}
+        maxValue={1}
+        onChange={pos => {
+          g_Sun.position.set(pos.x, pos.y, pos.z);
+        }}
+      />
+      <VectorFields
+        label="Sun Color"
+        dimensions={3}
+        vectorType="color"
+        inputType="slider"
+        defaultValue={new Vector3(1, 1, 1)}
+        minValue={0}
+        maxValue={1}
+        onChange={color => {
+          g_Sun.color.set(new THREE.Color(color.x, color.y, color.z))
+        }}
+      />
+      <VectorFields
+        label="Sun Intensity"
+        dimensions={1}
+        vectorType="color"
+        inputType="slider"
+        defaultValue={0.35}
+        minValue={0}
+        maxValue={1}
+        onChange={value => {
+          g_Sun.intensity = value.x;
+        }}
+      />
     </div>
+    <div style={{ display: "flex", justifyContent: "space-evenly", marginTop: "20px" }}>
+      <VectorFields
+        label="Ambient Color"
+        dimensions={3}
+        vectorType="color"
+        inputType="slider"
+        defaultValue={new Vector3(0.1, 0.1, 0.1)}
+        minValue={0}
+        maxValue={1}
+        onChange={color => {
+          g_AmbientLight.color.set(new THREE.Color(color.x, color.y, color.z));
+        }}
+      />
+      <VectorFields
+        label="Pointlight Intensity"
+        dimensions={1}
+        vectorType="color"
+        inputType="slider"
+        defaultValue={200}
+        minValue={0}
+        maxValue={500}
+        onChange={value => {
+          g_Pointlights.forEach(light => light.intensity = value.x)
+        }}
+      />
+    </div>
+    <div style={{ display: "flex", justifyContent: "space-evenly", marginTop: "20px" }}>
+      <VectorFields
+        label="Metallic"
+        dimensions={1}
+        vectorType="color"
+        inputType="slider"
+        defaultValue={0}
+        minValue={0}
+        maxValue={1}
+        onChange={value => {
+          if (!g_Material.uniforms.metallic)
+            g_Material.uniforms.metallic = { value: 0 }
+          g_Material.uniforms.metallic.value = value.x
+        }}
+      />
+      <VectorFields
+        label="Roughness"
+        dimensions={1}
+        vectorType="color"
+        inputType="slider"
+        defaultValue={0.25}
+        minValue={0}
+        maxValue={1}
+        onChange={value => {
+          if (!g_Material.uniforms.roughness)
+            g_Material.uniforms.roughness = { value: 0 }
+          g_Material.uniforms.roughness.value = value.x
+        }}
+      />
+    </div>
+  </div>
+
+  return (
+    initialized && page
   )
 }
