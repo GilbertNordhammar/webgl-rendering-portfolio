@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useReducer } from 'react';
 import * as THREE from 'three';
 import { Vector2, Vector3, Vector4, Matrix4, Light, Scene, Camera, Object3D } from "three"
-import { loadShaderCode } from "@lib/shaderUtils"
+import { loadShaderCode, loadTexture } from "@lib/resourceLoader"
 import VectorFields from "@components/VectorFields"
 
 const MAX_DIRECTIONAL_LIGHTS = 1
@@ -32,15 +32,20 @@ const init = async () => {
 
   g_Scene = new THREE.Scene()
 
+  g_Material.vertexShader = await loadShaderCode("pbr-pipeline/vert.glsl")
+  g_Material.fragmentShader = await loadShaderCode("pbr-pipeline/frag.glsl")
+
+  const albedo = await loadTexture("pbr/rusted-metal/albedo.png")
   g_Material.uniforms = {
     ...g_Material.uniforms,
     ...THREE.UniformsLib["lights"],
     directionalLightsCount: { value: 0 },
     pointLightsCount: { value: 0 },
-    viewMatrixInverse: { value: g_Camera.matrixWorldInverse }
+    viewMatrixInverse: { value: g_Camera.matrixWorldInverse },
+    albedoTex: { value: albedo }
   }
-  g_Material.vertexShader = await loadShaderCode("pbr-pipeline/vert.glsl")
-  g_Material.fragmentShader = await loadShaderCode("pbr-pipeline/frag.glsl")
+
+  console.log(g_Material.vertexShader)
 
   let geometry = new THREE.SphereGeometry(10, 32, 32);
   g_Mesh = new THREE.Mesh(geometry, g_Material);
