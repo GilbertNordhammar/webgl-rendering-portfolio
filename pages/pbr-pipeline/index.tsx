@@ -15,7 +15,8 @@ const g_Material = new THREE.ShaderMaterial({
   lights: true,
   defines: {
     MAX_DIRECTIONAL_LIGHTS,
-    MAX_POINT_LIGHTS
+    MAX_POINT_LIGHTS,
+    USE_TANGENT: true
   }
 });
 
@@ -35,19 +36,32 @@ const init = async () => {
   g_Material.vertexShader = await loadShaderCode("pbr-pipeline/vert.glsl")
   g_Material.fragmentShader = await loadShaderCode("pbr-pipeline/frag.glsl")
 
-  const albedo = await loadTexture("pbr/rusted-metal/albedo.png")
+  // const albedo = await loadTexture("pbr/rusted-metal/albedo.png")
+  // const metallic = await loadTexture("pbr/rusted-metal/metallic.png")
+  // const normal = await loadTexture("pbr/rusted-metal/normal.png")
+  // const roughness = await loadTexture("pbr/rusted-metal/roughness.png")
+
+  const albedo = await loadTexture("pbr/ocean-rock/albedo.png")
+  const metallic = await loadTexture("pbr/ocean-rock/metallic.png")
+  const normal = await loadTexture("pbr/ocean-rock/normal.png")
+  const roughness = await loadTexture("pbr/ocean-rock/roughness.png")
+  const ao = await loadTexture("pbr/ocean-rock/ao.png")
+
   g_Material.uniforms = {
     ...g_Material.uniforms,
     ...THREE.UniformsLib["lights"],
     directionalLightsCount: { value: 0 },
     pointLightsCount: { value: 0 },
     viewMatrixInverse: { value: g_Camera.matrixWorldInverse },
-    albedoTex: { value: albedo }
+    albedoTex: { value: albedo },
+    metallicTex: { value: metallic },
+    normalTex: { value: normal },
+    roughnessTex: { value: roughness },
+    ambientOcclusionTex: { value: ao }
   }
 
-  console.log(g_Material.vertexShader)
-
   let geometry = new THREE.SphereGeometry(10, 32, 32);
+  geometry.computeTangents()
   g_Mesh = new THREE.Mesh(geometry, g_Material);
 
   // Adding meshes
@@ -270,9 +284,9 @@ export default function PBRPipeline() {
         minValue={0}
         maxValue={1}
         onChange={value => {
-          if (!g_Material.uniforms.metallic)
-            g_Material.uniforms.metallic = { value: 0 }
-          g_Material.uniforms.metallic.value = value.x
+          if (!g_Material.uniforms.metallicMult)
+            g_Material.uniforms.metallicMult = { value: 0 }
+          g_Material.uniforms.metallicMult.value = value.x
         }}
       />
       <VectorFields
@@ -284,9 +298,9 @@ export default function PBRPipeline() {
         minValue={0}
         maxValue={1}
         onChange={value => {
-          if (!g_Material.uniforms.roughness)
-            g_Material.uniforms.roughness = { value: 0 }
-          g_Material.uniforms.roughness.value = value.x
+          if (!g_Material.uniforms.roughnessMult)
+            g_Material.uniforms.roughnessMult = { value: 0 }
+          g_Material.uniforms.roughnessMult.value = value.x
         }}
       />
     </div>

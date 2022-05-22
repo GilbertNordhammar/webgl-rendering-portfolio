@@ -1,9 +1,17 @@
 in vec3 Normal;
 in vec3 WorldPos;
+in vec2 FragCoord;
+in mat3 TBN;
 
 // Custom uniforms
-uniform float metallic;
-uniform float roughness;
+uniform float metallicMult;
+uniform float roughnessMult;
+
+uniform sampler2D albedoTex;
+uniform sampler2D metallicTex;
+uniform sampler2D normalTex;
+uniform sampler2D roughnessTex;
+uniform sampler2D ambientOcclusionTex;
 
 uniform int pointLightsCount;
 uniform mat4 viewMatrixInverse;
@@ -69,12 +77,19 @@ vec3 FresnelSchlick(vec3 halfway, vec3 viewDir, vec3 normalIncidence)
     return normalIncidence + (1.0 - normalIncidence) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
-void PBR(out vec3 color, vec3 radianceLight, vec3 lightDir, vec3 viewDir)
+void PBR(
+    out vec3 color, 
+    vec3 radianceLight, 
+    vec3 lightDir, 
+    vec3 viewDir,
+    vec3 albedo,
+    float metallic,
+    float roughness,
+    vec3 normal)
 {
-    vec3 N = normalize(Normal);
+    vec3 N = normalize(normal);
     vec3 halfway = normalize(lightDir + viewDir);
 
-    vec3 albedo = vec3(1, 0, 0);
     vec3 normalIncidence = mix(vec3(0.04), albedo, metallic);
 
     // cook-torrance brdf
@@ -93,13 +108,24 @@ void PBR(out vec3 color, vec3 radianceLight, vec3 lightDir, vec3 viewDir)
 
 void main()
 {
-    vec3 viewDir = normalize(cameraPosition - WorldPos);
-    vec3 albedo = vec3(1, 0, 0);
-
-    vec3 color = vec3(0.04) * albedo; // initialize with ambient
+    vec3 albedo = texture(albedoTex, FragCoord).rgb;
+    float metallic = texture(metallicTex, FragCoord).r * metallicMult;
+    float roughness = texture(roughnessTex, FragCoord).r * roughnessMult;
+    vec3 normal = normalize(TBN * (texture(normalTex, FragCoord).rgb * 2.0 - 1.0));
+    float ao = texture(ambientOcclusionTex, FragCoord).r;
     
+    vec3 color = vec3(0.04) * albedo * ao; // initialize with ambient
+    vec3 viewDir = normalize(cameraPosition - WorldPos);    
+
     // Applying directional light
-    PBR(color, directionalLights[0].color, directionalLights[0].direction, viewDir);
+    PBR(color, 
+        directionalLights[0].color, 
+        directionalLights[0].direction, 
+        viewDir, 
+        albedo,
+        metallic,
+        roughness,
+        normal);
 
     // Applying pointlights
     for(int i = 0; i < pointLightsCount; i++)
@@ -110,7 +136,15 @@ void main()
         float attenuation   = 1.0 / (dist * dist);
         vec3 radianceLight  = pointLights[i].color * attenuation;
         vec3 lightDir       = normalize(lightWorldPos - WorldPos);
-        PBR(color, radianceLight, lightDir, viewDir);
+        PBR(
+            color, 
+            radianceLight, 
+            lightDir, 
+            viewDir, 
+            albedo,
+            metallic,
+            roughness,
+            normal);
     }
 
     // Tone mapping and gamma correction
