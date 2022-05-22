@@ -1,8 +1,10 @@
-import React, { useEffect, useState, useReducer } from 'react';
+import React, { useEffect, useState, useReducer, useCallback } from 'react';
 import * as THREE from 'three';
 import { Vector2, Vector3, Vector4, Matrix4, Light, Scene, Camera, Object3D } from "three"
 import { loadShaderCode, loadTexture } from "@lib/resourceLoader"
 import VectorFields from "@components/VectorFields"
+import Dropdown from 'react-dropdown';
+import 'react-dropdown/style.css';
 
 const MAX_DIRECTIONAL_LIGHTS = 1
 const MAX_POINT_LIGHTS = 4
@@ -27,6 +29,9 @@ const g_DirectionalLights: THREE.DirectionalLight[] = []
 
 const g_PointlightsMeshes: THREE.Mesh[] = []
 
+const g_PBRMaterialNames = ["ocean-rock", "rusted-metal"]
+const g_defaultPBRMaterialName = g_PBRMaterialNames[0]
+
 const init = async () => {
   g_Camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 100)
   g_Camera.position.z = 40
@@ -36,29 +41,15 @@ const init = async () => {
   g_Material.vertexShader = await loadShaderCode("pbr-pipeline/vert.glsl")
   g_Material.fragmentShader = await loadShaderCode("pbr-pipeline/frag.glsl")
 
-  // const albedo = await loadTexture("pbr/rusted-metal/albedo.png")
-  // const metallic = await loadTexture("pbr/rusted-metal/metallic.png")
-  // const normal = await loadTexture("pbr/rusted-metal/normal.png")
-  // const roughness = await loadTexture("pbr/rusted-metal/roughness.png")
-
-  const albedo = await loadTexture("pbr/ocean-rock/albedo.png")
-  const metallic = await loadTexture("pbr/ocean-rock/metallic.png")
-  const normal = await loadTexture("pbr/ocean-rock/normal.png")
-  const roughness = await loadTexture("pbr/ocean-rock/roughness.png")
-  const ao = await loadTexture("pbr/ocean-rock/ao.png")
-
   g_Material.uniforms = {
     ...g_Material.uniforms,
     ...THREE.UniformsLib["lights"],
     directionalLightsCount: { value: 0 },
     pointLightsCount: { value: 0 },
-    viewMatrixInverse: { value: g_Camera.matrixWorldInverse },
-    albedoTex: { value: albedo },
-    metallicTex: { value: metallic },
-    normalTex: { value: normal },
-    roughnessTex: { value: roughness },
-    ambientOcclusionTex: { value: ao }
+    viewMatrixInverse: { value: g_Camera.matrixWorldInverse }
   }
+
+  await uploadTextures(g_defaultPBRMaterialName);
 
   let geometry = new THREE.SphereGeometry(10, 32, 32);
   geometry.computeTangents()
@@ -79,7 +70,41 @@ const init = async () => {
   g_Renderer = new THREE.WebGLRenderer({ antialias: true });
   g_Renderer.setSize(window.innerWidth, window.innerHeight);
   g_Renderer.setAnimationLoop(animation);
-  document.body.appendChild(g_Renderer.domElement);
+}
+
+const uploadTextures = async (materialName: string) => {
+  if (uploadTextures["lastMaterial"] == materialName)
+    return;
+  uploadTextures["lastMaterial"] = materialName
+
+  if (g_PBRMaterialNames.includes(materialName)) {
+    const albedo = await loadTexture(`pbr/${materialName}/albedo.png`, true)
+    const metallic = await loadTexture(`pbr/${materialName}/metallic.png`, true)
+    const normal = await loadTexture(`pbr/${materialName}/normal.png`, true)
+    const roughness = await loadTexture(`pbr/${materialName}/roughness.png`, true)
+    const ao = await loadTexture(`pbr/${materialName}/ao.png`, false)
+
+    if (!g_Material.uniforms.albedoTex) {
+      g_Material.uniforms = {
+        ...g_Material.uniforms,
+        albedoTex: { value: albedo },
+        metallicTex: { value: metallic },
+        normalTex: { value: normal },
+        roughnessTex: { value: roughness },
+        ambientOcclusionTex: { value: ao }
+      }
+    }
+    else {
+      g_Material.uniforms.albedoTex.value = albedo
+      g_Material.uniforms.metallicTex.value = metallic
+      g_Material.uniforms.normalTex.value = normal
+      g_Material.uniforms.roughnessTex.value = roughness
+      g_Material.uniforms.ambientOcclusionTex.value = ao
+    }
+  }
+  else {
+    console.error(`Invalid material name ${materialName}`)
+  }
 }
 
 const addLight = (
@@ -171,14 +196,18 @@ export default function PBRPipeline() {
   const [initialized, setInitialized] = useState(false)
   const [, forceUpdate] = useReducer(x => x + 1, 0);
 
+  const onCanvasContainerReady = useCallback(node => {
+    if (node && !initialized) {
+      init().then(() => {
+        node.appendChild(g_Renderer.domElement)
+
+        setInitialized(true)
+        forceUpdate()
+      })
+    }
+  }, []);
+
   useEffect(() => {
-    document.addEventListener("initialized", () => setInitialized(true))
-
-    init().then(() => {
-      setInitialized(true)
-      forceUpdate()
-    })
-
     let altDown = false;
     let rotateCamera = false;
     window.addEventListener('mousemove', e => {
@@ -211,6 +240,9 @@ export default function PBRPipeline() {
 
   const page = <div>
     <div style={{ display: "flex", justifyContent: "space-evenly" }}>
+      <Dropdown options={g_PBRMaterialNames} value={g_defaultPBRMaterialName} onChange={materialName => {
+        uploadTextures(materialName.value)
+      }} />
       <VectorFields
         label="Sun Direction"
         dimensions={3}
@@ -307,6 +339,10 @@ export default function PBRPipeline() {
   </div>
 
   return (
-    initialized && page
+    <div>
+      {initialized && page}
+      <div ref={onCanvasContainerReady} />
+    </div>
+
   )
 }

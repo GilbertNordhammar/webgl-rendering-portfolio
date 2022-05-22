@@ -1,0 +1,7 @@
+{
+    "albedo": true,
+    "metallic": true,
+    "normal": true,
+    "roughness": true,
+    "ambientOcclusion": true
+}

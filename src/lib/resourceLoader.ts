@@ -6,7 +6,7 @@ export const loadShaderCode = async (path: string): Promise<string> => {
     return shader
 }
 
-export const loadTexture = async (path: string): Promise<THREE.Texture> => {
+export const loadTexture = async (path: string, showErrors: boolean): Promise<THREE.Texture> => {
     try {
         const loading = new Promise<THREE.Texture>((resolve, reject) => {
             const url = `${window.location.origin}/textures/${path}`
@@ -27,7 +27,7 @@ export const loadTexture = async (path: string): Promise<THREE.Texture> => {
         return texture
     }
     catch (e) {
-        console.log(`Couldn't load texture '${path}'`, e)
+        if (showErrors) console.error(`Couldn't load texture '${path}'`, e)
     }
 
 }
