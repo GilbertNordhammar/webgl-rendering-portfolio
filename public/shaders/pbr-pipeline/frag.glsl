@@ -4,14 +4,14 @@ in vec2 FragCoord;
 in mat3 TBN;
 
 // Custom uniforms
-uniform float metallicMult;
-uniform float roughnessMult;
+uniform float metalnessScale;
+uniform float roughnessScale;
 
-uniform sampler2D albedoTex;
-uniform sampler2D metallicTex;
-uniform sampler2D normalTex;
-uniform sampler2D roughnessTex;
-uniform sampler2D ambientOcclusionTex;
+uniform sampler2D albedoMap;
+uniform sampler2D metalnessMap;
+uniform sampler2D normalMap;
+uniform sampler2D roughnessMap;
+uniform sampler2D ambientOcclusionMap;
 
 uniform int pointLightsCount;
 uniform mat4 viewMatrixInverse;
@@ -108,11 +108,11 @@ void PBR(
 
 void main()
 {
-    vec3 albedo = texture(albedoTex, FragCoord).rgb;
-    float metallic = texture(metallicTex, FragCoord).r * metallicMult;
-    float roughness = texture(roughnessTex, FragCoord).r * roughnessMult;
-    vec3 normal = normalize(TBN * (texture(normalTex, FragCoord).rgb * 2.0 - 1.0));
-    float ao = texture(ambientOcclusionTex, FragCoord).r;
+    vec3 albedo = texture(albedoMap, FragCoord).rgb;
+    float metallic = texture(metalnessMap, FragCoord).r * metalnessScale;
+    float roughness = texture(roughnessMap, FragCoord).r * roughnessScale;
+    vec3 normal = normalize(TBN * (texture(normalMap, FragCoord).rgb * 2.0 - 1.0));
+    float ao = texture(ambientOcclusionMap, FragCoord).r;
     
     vec3 color = vec3(0.04) * albedo * ao; // initialize with ambient
     vec3 viewDir = normalize(cameraPosition - WorldPos);    
@@ -152,4 +152,9 @@ void main()
     color = pow(color, vec3(1.0/2.2));
 
     gl_FragColor = vec4(color, 1);
+
+    // Tone mapping and gamma correction
+    // albedo = albedo / (albedo + vec3(1.0));
+    // albedo = pow(albedo, vec3(1.0/2.2));
+    // gl_FragColor.rgb = albedo;
 }
