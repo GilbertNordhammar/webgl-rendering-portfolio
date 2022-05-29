@@ -78,7 +78,7 @@ vec3 FresnelSchlick(vec3 halfway, vec3 viewDir, vec3 normalIncidence)
 }
 
 void PBR(
-    out vec3 color, 
+    inout vec3 color, 
     vec3 radianceLight, 
     vec3 lightDir, 
     vec3 viewDir,
